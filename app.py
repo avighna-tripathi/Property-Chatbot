@@ -164,10 +164,7 @@ def find_properties(df, query, model, embeddings):
 
 # --- UI Components ---
 def display_property_card(prop):
-    """
-    Renders a single property result in a card format.
-    Uses .get() for all fields to prevent KeyErrors if data is unexpectedly missing.
-    """
+    
     st.markdown("---")
     
     col1, col2 = st.columns([2, 1])
@@ -190,7 +187,7 @@ def main():
     """The main function that runs the Streamlit app."""
     st.set_page_config(page_title="Real Estate AI", page_icon="🏘️")
     st.title("🏘️ AI-Powered Property Finder")
-    st.markdown("Ask me to find properties, like _'show me 3bhk flats under 2cr in Pune'_.")
+    st.markdown("Ask me to find properties from my database")
 
     property_df = get_property_data()
     
