@@ -1,4 +1,4 @@
-AI Property Search Chatbot 
+AI Property Search Chatbot (deployment link : https://property-chatbot-110204.streamlit.app/)
 This is a proof-of-concept project I built to explore how natural language processing can make 
 searching for real estate more intuitive. Instead of using a dozen dropdowns and filters, you can 
 just type what you're looking for in plain English. 
