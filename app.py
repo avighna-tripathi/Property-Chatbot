@@ -133,34 +133,61 @@ def extract_filters_from_query(query_text):
 
 def find_properties(df, query, model, embeddings):
     """
-    The main search function. It combines rule-based filtering with semantic search.
+    An improved search function combining soft rule-based filtering 
+    with semantic search fallback.
     """
     filters = extract_filters_from_query(query)
+    
+    # 1. Start with a copy of the dataframe
     filtered_df = df.copy()
 
+    # 2. Apply strict filters ONLY if they match clearly (BHK & Price)
     if 'bhk' in filters:
-        filtered_df = filtered_df[filtered_df['BHK_NUM'] == filters['bhk']]
-    if 'max_price' in filters:
-        filtered_df = filtered_df[filtered_df['PRICE_NUM'] <= filters['max_price']]
-    if 'location_terms' in filters:
+        # Match exact BHK if extracted
+        matching_bhk = filtered_df[filtered_df['BHK_NUM'] == filters['bhk']]
+        if not matching_bhk.empty:
+            filtered_df = matching_bhk
+            
+    if 'max_price' in filters and filters['max_price'] > 0:
+        # Match budget constraints
+        matching_price = filtered_df[filtered_df['PRICE_NUM'] <= filters['max_price']]
+        if not matching_price.empty:
+            filtered_df = matching_price
+
+    # 3. Soft Location Filtering (Fallback to semantic if text filtering kills results)
+    if 'location_terms' in filters and len(filters['location_terms']) > 0:
+        location_df = filtered_df.copy()
         for term in filters['location_terms']:
-            filtered_df = filtered_df[
-                filtered_df['projectName'].str.lower().str.contains(term, na=False) |
-                filtered_df['fullAddress'].str.lower().str.contains(term, na=False)
+            location_df = location_df[
+                location_df['projectName'].str.lower().str.contains(term, na=False) |
+                location_df['fullAddress'].str.lower().str.contains(term, na=False)
             ]
+        # ONLY commit to the location filter if it didn't completely wipe out your data
+        if not location_df.empty:
+            filtered_df = location_df
 
+    # 4. Semantic Search Execution
     if not filtered_df.empty:
+        # To avoid index drift, get the integer positions (iloc positions) of filtered rows
+        # mapping back to the original numpy/tensor array index
         result_indices = filtered_df.index.tolist()
-        corpus_embeddings = embeddings[result_indices]
+        
+        # SBERT Encoding
         query_embedding = model.encode(query, convert_to_tensor=True)
-        cos_scores = util.pytorch_cos_sim(query_embedding, corpus_embeddings)[0]
-        top_indices = np.argsort(-cos_scores.cpu().numpy())
-        sorted_indices = [result_indices[i] for i in top_indices]
-        ranked_df = df.loc[sorted_indices]
+        
+        # Calculate similarity across the WHOLE dataset or filtered subset safely
+        # Note: To guarantee absolute safety against tensor index mismatch, 
+        # we compute similarity against all, then filter the scores.
+        cos_scores = util.pytorch_cos_sim(query_embedding, embeddings)[0].cpu().numpy()
+        
+        # Add scores back to the dataframe temporarily to sort
+        filtered_df['SEARCH_SCORE'] = [cos_scores[idx] for idx in result_indices]
+        
+        # Sort by best semantic match
+        ranked_df = filtered_df.sort_values(by='SEARCH_SCORE', ascending=False)
         return ranked_df.head(5)
-    
+        
     return pd.DataFrame()
-
 
 # --- UI Components ---
 def display_property_card(prop):
